@@ -1,5 +1,7 @@
 package org.thirdxiaozhu;
 
+import org.thirdxiaozhu.data.Flight;
+
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -9,10 +11,13 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Vector;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Util {
+
 
     /**
      * 格式化时间
@@ -57,6 +62,27 @@ public class Util {
         return args.isEmpty() ? null : args;
     }
 
+    public static void addNode(Flight flight, CopyOnWriteArrayList<Flight> flights){
+        Date estr = flight.getStls_estr();
+        if(estr == null) {
+            return;
+        }
+
+        for(int i = 0; i == 0 || i < flights.size(); i++){
+            if(flights.size() == 0){
+                flights.add(flight);
+            }else if(estr.after(flights.get(i).getStls_estr()) && (flights.size() == i+1 || estr.before(flights.get(i+1).getStls_estr()))){
+                flights.add(i+1, flight);
+            }
+            System.out.println(flights.get(i).getStls_estr() + " " + flights.get(i).getStls_eend());
+        }
+    }
+
+    /**
+     * 字符串转十六进制
+     * @param s
+     * @return
+     */
     public static String strTo16(String s) {
         String str = "";
         for (int i = 0; i < s.length(); i++) {

@@ -52,6 +52,7 @@ public class Flight {
     public int state;
     public int fatt;
     public int rec_dep;
+    public boolean onBoard;
 
     public Map<Integer, String> apcds;
 
@@ -169,6 +170,14 @@ public class Flight {
 
     public Map<Integer, String> getApcds() {
         return apcds;
+    }
+
+    public boolean isOnBoard() {
+        return onBoard;
+    }
+
+    public void setOnBoard(boolean onBoard) {
+        this.onBoard = onBoard;
     }
 
     @Override

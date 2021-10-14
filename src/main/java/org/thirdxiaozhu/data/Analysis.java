@@ -8,24 +8,29 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class Analysis {
     //设置加速时间
-    private final int ACCELERATION = 100;
+    private final int ACCELERATION = 50;
 
-    private String filePath;
+    private final String filePath;
     private GetInfosTask getInfosTask;
     private TimeTask timeTask;
-    private Map<String, Flight> flightMap;
+    private final Map<String, Flight> flightMap;
     private Date currentTime;
+    public static CopyOnWriteArrayList<Flight> flightQueue;
+    public static CopyOnWriteArrayList<Flight> flightOnBoard;
     private final DateFormat df = new SimpleDateFormat("yyyyMMddHHmmss");
 
     public Analysis(String filePath) throws ParseException {
-        flightMap = new HashMap<>();
         this.filePath = filePath;
+        flightMap = new HashMap<>();
+        flightQueue = new CopyOnWriteArrayList<>();
+        flightOnBoard = new CopyOnWriteArrayList<>();
         getInfosTask = new GetInfosTask();
         timeTask = new TimeTask();
         getInfosTask.start();
@@ -34,8 +39,8 @@ public class Analysis {
 
     /**
      * 解析报文
-     * @param message
-     * @param pattern
+     * @param message 信息
+     * @param pattern 报文模式
      * @throws ParseException
      */
     public void parseMessage(String message, String pattern) throws ParseException {
@@ -82,11 +87,11 @@ public class Analysis {
     public static class ParseConctrete {
         /**
          * 目的地解析
-         * @param message
-         * @param flight
+         * @param message 信息
+         * @param flight 实体类
          * @throws ParseException
          */
-        public static void parseAirl(String message, Flight flight) throws ParseException {
+        public static void parseAirl(String message, Flight flight) {
             List<String> regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.lastIndexOf("]") + 1));
             for(String s : regulared){
                 s = s.substring(s.indexOf("[") + 1, s.indexOf("]") + 1);
@@ -98,8 +103,8 @@ public class Analysis {
 
         /**
          * 机位动态更新
-         * @param message
-         * @param flight
+         * @param message 信息
+         * @param flight 实体类
          * @throws ParseException
          */
         public static void parseStls(String message, Flight flight) throws ParseException {
@@ -109,12 +114,17 @@ public class Analysis {
             flight.setStls_eend(Util.getTime(args[3].split("=")[1]));
             flight.setStls_rstr(Util.getTime(args[4].split("=")[1]));
             flight.setStls_rend(Util.getTime(args[5].split("=")[1]));
+
+            if(flight.getRec_dep() == Flight.DEPART){
+                Util.addNode(flight, flightQueue);
+            }
+            //System.out.println(flightVector.size() + "!!!!!!!!!!!!!!!!!!!!!");
         }
 
         /**
          * 开始值机
-         * @param message
-         * @param flight
+         * @param message 信息
+         * @param flight 实体类
          * @throws ParseException
          */
         public static void parseCkie(String message, Flight flight) throws ParseException {
@@ -125,8 +135,8 @@ public class Analysis {
 
         /**
          * 结束值机
-         * @param message
-         * @param flight
+         * @param message 信息
+         * @param flight 实体类
          * @throws ParseException
          */
         public static void parseCkoe(String message, Flight flight) throws ParseException {
@@ -142,23 +152,22 @@ public class Analysis {
     public class GetInfosTask extends Thread{
 
         public GetInfosTask() throws ParseException {
+            //从2018年9月23日0点2分25秒开始
             currentTime = Util.getTime("20180923000225");
         }
 
         @Override
         public void run() {
             try (Scanner scanner = new Scanner(new File(filePath))) {
-                //从2018年9月23日0点2分25秒开始
                 while (scanner.hasNextLine()){
                     String perMessage = scanner.nextLine();
                     String[] timeAndPattern = perMessage.split(" ");
                     Date nextTime = Util.getTime(timeAndPattern[0].split("=")[1]);
 
+                    assert nextTime != null;
                     sleep(Util.getTimeDiff(nextTime, currentTime) / (1000 / ACCELERATION));
-                    System.out.println(perMessage);
+                    //System.out.println(perMessage);
                     parseMessage(perMessage, timeAndPattern[1].substring(5,9));
-                    currentTime = nextTime;
-
                 }
             } catch (FileNotFoundException | ParseException | InterruptedException e) {
                 e.printStackTrace();
@@ -168,18 +177,42 @@ public class Analysis {
     }
 
     public class TimeTask extends Thread{
-        private int i = 0;
-        private Runnable runnable = new Runnable() {
+        /**
+         * 时间变更任务
+         */
+        private final Runnable time = new Runnable() {
             @Override
             public void run() {
                 try {
-                    System.out.println(i);
-                    currentTime = df.parse(df.format(currentTime.getTime() + (long) 1 * ACCELERATION));
-                    System.out.println(currentTime);
+                    currentTime = df.parse(df.format(currentTime.getTime() + (long) 1000));
+                    //System.out.println(currentTime);
                 } catch (ParseException e) {
                     e.printStackTrace();
                 }
-                i++;
+            }
+        };
+
+        /**
+         * 每分钟任务
+         */
+        private final Runnable perMinute = new Runnable() {
+            @Override
+            public void run() {
+                System.out.println(currentTime);
+                try {
+                    if (flightQueue.size() != 0) {
+                        for (Flight f : flightQueue) {
+                            if (currentTime.after(f.getStls_estr()) && !f.isOnBoard()) {
+                                flightQueue.remove(f);
+                                flightOnBoard.add(f);
+                                f.setOnBoard(true);
+                            }
+                        }
+                        System.out.println("BoardSize : " + flightOnBoard.size());
+                    }
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
             }
         };
 
@@ -189,7 +222,8 @@ public class Analysis {
                     .newSingleThreadScheduledExecutor();
             // 第二个参数为首次执行的延时时间，第三个参数为定时执行的间隔时间
             //service.scheduleAtFixedRate(runnable, 0, 60, TimeUnit.SECONDS);
-            service.scheduleAtFixedRate(runnable, 0, ACCELERATION, TimeUnit.MILLISECONDS);
+            service.scheduleAtFixedRate(time, 0, ACCELERATION, TimeUnit.MILLISECONDS);
+            service.scheduleAtFixedRate(perMinute, 0, ACCELERATION * 60, TimeUnit.MILLISECONDS);
         }
     }
 }
