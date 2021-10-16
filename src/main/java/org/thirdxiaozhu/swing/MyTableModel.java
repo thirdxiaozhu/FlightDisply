@@ -24,4 +24,5 @@ public class MyTableModel extends DefaultTableModel {
         // TODO Auto-generated method stub
         super.setValueAt(arg0, arg1, arg2);
     }
+
 }

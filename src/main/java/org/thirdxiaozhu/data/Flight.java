@@ -1,8 +1,7 @@
 package org.thirdxiaozhu.data;
 
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 public class Flight {
     //没有状态
@@ -49,6 +48,10 @@ public class Flight {
     public Date ckie_fcrs;
     //值机结束时间
     public Date ckoe_fcre;
+    //预测值机开始
+    public Date forecast_fcrs;
+    //预测值机结束时间
+    public Date forecast_fcre;
     public int state;
     public int fatt;
     public int rec_dep;
@@ -122,6 +125,37 @@ public class Flight {
 
     public void setStls_eend(Date stls_eend) {
         this.stls_eend = stls_eend;
+
+        if(stls_eend != null) {
+            //开始办票时间（起飞时间-2小时）
+            Calendar pre_Cal = Calendar.getInstance();
+            pre_Cal.setTime(this.stls_eend);
+            pre_Cal.add(Calendar.HOUR_OF_DAY, -2);
+
+            //结束办票时间（起飞时间-40分钟）
+            Calendar aft_Cal = Calendar.getInstance();
+            aft_Cal.setTime(this.stls_eend);
+            aft_Cal.add(Calendar.MINUTE, -40);
+
+            setForecast_fcrs(pre_Cal.getTime());
+            setForecast_fcre(aft_Cal.getTime());
+        }
+    }
+
+    public Date getForecast_fcrs() {
+        return forecast_fcrs;
+    }
+
+    public void setForecast_fcrs(Date forecast_fcrs) {
+        this.forecast_fcrs = forecast_fcrs;
+    }
+
+    public Date getForecast_fcre() {
+        return forecast_fcre;
+    }
+
+    public void setForecast_fcre(Date forecast_fcre) {
+        this.forecast_fcre = forecast_fcre;
     }
 
     public Date getStls_rstr() {
@@ -168,8 +202,22 @@ public class Flight {
         this.apcds.put(Integer.parseInt(id), apcd);
     }
 
-    public Map<Integer, String> getApcds() {
-        return apcds;
+    /**
+     * 获取经停站、终点站
+     * @return
+     */
+    public String getApcds() {
+        if(apcds.isEmpty()){
+            return "null";
+        }else{
+            String ret = "";
+            String[] apcdStrings = apcds.values().toArray(new String[apcds.size()]);
+            //刨除起点站
+            for(int i = 1; i < apcds.size(); i++){
+                ret += apcdStrings[i];
+            }
+            return ret;
+        }
     }
 
     public boolean isOnBoard() {

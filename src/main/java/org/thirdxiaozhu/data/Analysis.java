@@ -1,9 +1,11 @@
 package org.thirdxiaozhu.data;
 
 import org.thirdxiaozhu.Util;
+import org.thirdxiaozhu.swing.MainForm;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.security.PublicKey;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -15,9 +17,12 @@ import java.util.concurrent.TimeUnit;
 
 public class Analysis {
     //设置加速时间
-    private final int ACCELERATION = 50;
+    //标准速度为1000
+    private final int ACCELERATION = 10;
 
     private final String filePath;
+    private final MainForm mainForm;
+
     private GetInfosTask getInfosTask;
     private TimeTask timeTask;
     private final Map<String, Flight> flightMap;
@@ -26,8 +31,10 @@ public class Analysis {
     public static CopyOnWriteArrayList<Flight> flightOnBoard;
     private final DateFormat df = new SimpleDateFormat("yyyyMMddHHmmss");
 
-    public Analysis(String filePath) throws ParseException {
+    public Analysis(String filePath, MainForm mainForm) throws ParseException {
         this.filePath = filePath;
+        this.mainForm = mainForm;
+
         flightMap = new HashMap<>();
         flightQueue = new CopyOnWriteArrayList<>();
         flightOnBoard = new CopyOnWriteArrayList<>();
@@ -97,8 +104,6 @@ public class Analysis {
                 s = s.substring(s.indexOf("[") + 1, s.indexOf("]") + 1);
                 flight.setApcd(s.split(", ")[0].split("=")[1], s.split(", ")[1].split("=")[1]);
             }
-            if(flight.getRec_dep() == Flight.DEPART) {
-            }
         }
 
         /**
@@ -115,10 +120,10 @@ public class Analysis {
             flight.setStls_rstr(Util.getTime(args[4].split("=")[1]));
             flight.setStls_rend(Util.getTime(args[5].split("=")[1]));
 
+            //如果是即将起飞的飞机，按estr进行排序
             if(flight.getRec_dep() == Flight.DEPART){
-                Util.addNode(flight, flightQueue);
+                Util.addNode(flight, flightQueue, Util.ESTR);
             }
-            //System.out.println(flightVector.size() + "!!!!!!!!!!!!!!!!!!!!!");
         }
 
         /**
@@ -129,8 +134,11 @@ public class Analysis {
          */
         public static void parseCkie(String message, Flight flight) throws ParseException {
             message = message.substring(message.indexOf("[") + 1, message.indexOf("]"));
-            flight.setCkie_fcrs(Util.getTime(message.split(", ")[5].split("=")[1]));
-            flight.setState(Flight.CKIE);
+            String fcrs = message.split(", ")[5].split("=")[1];
+            if(!"null".equals(fcrs)){
+                flight.setCkie_fcrs(Util.getTime(fcrs));
+                flight.setState(Flight.CKIE);
+            }
         }
 
         /**
@@ -143,6 +151,16 @@ public class Analysis {
             message = message.substring(message.indexOf("[") + 1, message.indexOf("]"));
             flight.setCkoe_fcre(Util.getTime(message.split(", ")[5].split("=")[1]));
             flight.setState(Flight.CKOE);
+        }
+
+        /**
+         * 值机状态变更
+         * @param message
+         * @param flight
+         * @throws ParseException
+         */
+        public static void parseCKLS(String message, Flight flight) throws ParseException{
+
         }
     }
 
@@ -165,8 +183,9 @@ public class Analysis {
                     Date nextTime = Util.getTime(timeAndPattern[0].split("=")[1]);
 
                     assert nextTime != null;
+                    //强制对齐时间（如果加速过快可能会让下一时间早于上一时间）
+                    nextTime = nextTime.before(currentTime) ? currentTime : nextTime;
                     sleep(Util.getTimeDiff(nextTime, currentTime) / (1000 / ACCELERATION));
-                    //System.out.println(perMessage);
                     parseMessage(perMessage, timeAndPattern[1].substring(5,9));
                 }
             } catch (FileNotFoundException | ParseException | InterruptedException e) {
@@ -199,17 +218,58 @@ public class Analysis {
             @Override
             public void run() {
                 System.out.println(currentTime);
-                try {
-                    if (flightQueue.size() != 0) {
-                        for (Flight f : flightQueue) {
-                            if (currentTime.after(f.getStls_estr()) && !f.isOnBoard()) {
-                                flightQueue.remove(f);
-                                flightOnBoard.add(f);
-                                f.setOnBoard(true);
+                //循环查看实体队列，如果当前时间大于队列里某一实体的estr，那么该实体进入OnBoard
+                for (Flight f : flightQueue) {
+                    if (currentTime.after(f.getStls_estr()) && !f.isOnBoard()) {
+                        flightQueue.remove(f);
+                        Util.addNode(f, flightOnBoard, Util.FORECAST);
+                        f.setOnBoard(true);
+                    }
+                }
+
+                Collections.sort(flightOnBoard, new Comparator<Flight>() {
+                    @Override
+                    public int compare(Flight o1, Flight o2) {
+                        int cr = 0;
+
+                        //先按状态排序，再按预计开始时间排序
+                        int a = o1.getState() - o2.getState();
+                        if(a != 0){
+                            cr = (a > 0) ? -3: 1;
+                        }else {
+                            boolean after = o1.getForecast_fcrs().after(o2.getForecast_fcrs());
+                            boolean equal = o1.getForecast_fcrs().equals(o2.getForecast_fcrs());
+                            if(!equal){
+                                cr = after ? 2 : -2;
                             }
                         }
-                        System.out.println("BoardSize : " + flightOnBoard.size());
+                        return cr;
                     }
+                });
+
+                //循环查看OnBoard，如果当前时间大于队列里某一实体的eend，那么该实体移除OnBoard
+                flightOnBoard.removeIf(f -> currentTime.after(f.getStls_eend()));
+
+                System.out.println("BoardSize : " + flightOnBoard.size());
+            }
+        };
+
+        /**
+         * 每30秒切换一次
+         */
+        private final Runnable perHalfMinute = new Runnable() {
+            private int i = 0;
+            @Override
+            public void run() {
+                try {
+                    //最后一页内容的数量
+                    int temp = flightOnBoard.size() - i * 10;
+                    List<Flight> flightList = new ArrayList<>();
+                    for (int r = 0; r < Math.min(temp, 10); r++) {
+                        flightList.add(flightOnBoard.get(i * 10 + r));
+                    }
+                    i = temp <= 10 ? 0 : i + 1;
+                    mainForm.updateTable(flightList);
                 }catch (Exception e){
                     e.printStackTrace();
                 }
@@ -224,6 +284,7 @@ public class Analysis {
             //service.scheduleAtFixedRate(runnable, 0, 60, TimeUnit.SECONDS);
             service.scheduleAtFixedRate(time, 0, ACCELERATION, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(perMinute, 0, ACCELERATION * 60, TimeUnit.MILLISECONDS);
+            service.scheduleAtFixedRate(perHalfMinute, 0, ACCELERATION * 30, TimeUnit.MILLISECONDS);
         }
     }
 }

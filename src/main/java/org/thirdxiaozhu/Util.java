@@ -8,16 +8,16 @@ import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Vector;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Util {
-
+    public static final int ESTR = 0;
+    public static final int FORECAST = 1;
+    public static final int CKIE = 2;
+    public static final int CKOE = 3;
 
     /**
      * 格式化时间
@@ -62,19 +62,60 @@ public class Util {
         return args.isEmpty() ? null : args;
     }
 
-    public static void addNode(Flight flight, CopyOnWriteArrayList<Flight> flights){
-        Date estr = flight.getStls_estr();
-        if(estr == null) {
+    /**
+     * 向特定的List里面插入实体
+     * @param flight
+     * @param flights
+     * @param mode
+     */
+    public static void addNode(Flight flight, CopyOnWriteArrayList<Flight> flights, int mode){
+        Date processed = Util.ProcessMode(flight, mode);
+        if(processed == null) {
             return;
         }
 
         for(int i = 0; i == 0 || i < flights.size(); i++){
             if(flights.size() == 0){
                 flights.add(flight);
-            }else if(estr.after(flights.get(i).getStls_estr()) && (flights.size() == i+1 || estr.before(flights.get(i+1).getStls_estr()))){
+            }else if(processed.after(Util.ProcessMode(flights.get(i), mode)) && (flights.size() == i+1 || processed.before(Util.ProcessMode(flights.get(i+1), mode)))){
                 flights.add(i+1, flight);
             }
-            System.out.println(flights.get(i).getStls_estr() + " " + flights.get(i).getStls_eend());
+        }
+    }
+
+    /**
+     * 根据模式进行插入操作
+     * @param f
+     * @param mode
+     * @return
+     */
+    private static Date ProcessMode(Flight f, int mode){
+        return switch (mode) {
+            case ESTR -> f.getStls_estr();
+            case FORECAST -> f.getForecast_fcre();
+            case CKIE -> f.getStls_estr();
+            case CKOE -> f.getStls_estr();
+            default -> null;
+        };
+    }
+
+    /**
+     * 处理办票时间并返回
+     * @param f
+     * @return
+     */
+    public static String dealTime(Flight f){
+        SimpleDateFormat format = new SimpleDateFormat("HH:mm");
+        return format.format(f.getForecast_fcrs()) + "-" + format.format(f.getForecast_fcre());
+    }
+
+    public static String getState(Flight f){
+        if(f.getState() == Flight.CKIE){
+            return "正在办票";
+        }else if(f.getState() == Flight.CKOE){
+            return "停止办票";
+        }else {
+            return "";
         }
     }
 
