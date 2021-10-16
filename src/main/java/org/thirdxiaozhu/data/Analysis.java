@@ -5,7 +5,6 @@ import org.thirdxiaozhu.swing.MainForm;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.security.PublicKey;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -80,89 +79,14 @@ public class Analysis {
             case "CKOE":
                 ParseConctrete.parseCkoe(regulared, currentFlight);
                 break;
-            case "BORE":
+            case "CKLS":
+                ParseConctrete.parseCkls(regulared, currentFlight);
                 break;
             default:
                 break;
         }
     }
 
-
-    /**
-     * 获取具体数据
-     */
-    public static class ParseConctrete {
-        /**
-         * 目的地解析
-         * @param message 信息
-         * @param flight 实体类
-         * @throws ParseException
-         */
-        public static void parseAirl(String message, Flight flight) {
-            List<String> regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.lastIndexOf("]") + 1));
-            for(String s : regulared){
-                s = s.substring(s.indexOf("[") + 1, s.indexOf("]") + 1);
-                flight.setApcd(s.split(", ")[0].split("=")[1], s.split(", ")[1].split("=")[1]);
-            }
-        }
-
-        /**
-         * 机位动态更新
-         * @param message 信息
-         * @param flight 实体类
-         * @throws ParseException
-         */
-        public static void parseStls(String message, Flight flight) throws ParseException {
-            String regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.indexOf("]") + 1)).get(0);
-            String[] args = regulared.split(", ");
-            flight.setStls_estr(Util.getTime(args[2].split("=")[1]));
-            flight.setStls_eend(Util.getTime(args[3].split("=")[1]));
-            flight.setStls_rstr(Util.getTime(args[4].split("=")[1]));
-            flight.setStls_rend(Util.getTime(args[5].split("=")[1]));
-
-            //如果是即将起飞的飞机，按estr进行排序
-            if(flight.getRec_dep() == Flight.DEPART){
-                Util.addNode(flight, flightQueue, Util.ESTR);
-            }
-        }
-
-        /**
-         * 开始值机
-         * @param message 信息
-         * @param flight 实体类
-         * @throws ParseException
-         */
-        public static void parseCkie(String message, Flight flight) throws ParseException {
-            message = message.substring(message.indexOf("[") + 1, message.indexOf("]"));
-            String fcrs = message.split(", ")[5].split("=")[1];
-            if(!"null".equals(fcrs)){
-                flight.setCkie_fcrs(Util.getTime(fcrs));
-                flight.setState(Flight.CKIE);
-            }
-        }
-
-        /**
-         * 结束值机
-         * @param message 信息
-         * @param flight 实体类
-         * @throws ParseException
-         */
-        public static void parseCkoe(String message, Flight flight) throws ParseException {
-            message = message.substring(message.indexOf("[") + 1, message.indexOf("]"));
-            flight.setCkoe_fcre(Util.getTime(message.split(", ")[5].split("=")[1]));
-            flight.setState(Flight.CKOE);
-        }
-
-        /**
-         * 值机状态变更
-         * @param message
-         * @param flight
-         * @throws ParseException
-         */
-        public static void parseCKLS(String message, Flight flight) throws ParseException{
-
-        }
-    }
 
     /**
      * 读取线程
@@ -285,6 +209,85 @@ public class Analysis {
             service.scheduleAtFixedRate(time, 0, ACCELERATION, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(perMinute, 0, ACCELERATION * 60, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(perHalfMinute, 0, ACCELERATION * 30, TimeUnit.MILLISECONDS);
+        }
+    }
+
+
+    /**
+     * 获取具体数据
+     */
+    public static class ParseConctrete {
+        /**
+         * 目的地解析
+         * @param message 信息
+         * @param flight 实体类
+         * @throws ParseException
+         */
+        public static void parseAirl(String message, Flight flight) {
+            List<String> regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.lastIndexOf("]") + 1));
+            for(String s : regulared){
+                s = s.substring(s.indexOf("[") + 1, s.indexOf("]") + 1);
+                flight.setApcd(s.split(", ")[0].split("=")[1], s.split(", ")[1].split("=")[1]);
+            }
+        }
+
+        /**
+         * 机位动态更新
+         * @param message 信息
+         * @param flight 实体类
+         * @throws ParseException
+         */
+        public static void parseStls(String message, Flight flight) throws ParseException {
+            String regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.indexOf("]") + 1)).get(0);
+            String[] args = regulared.split(", ");
+            flight.setStls_estr(Util.getTime(args[2].split("=")[1]));
+            flight.setStls_eend(Util.getTime(args[3].split("=")[1]));
+            flight.setStls_rstr(Util.getTime(args[4].split("=")[1]));
+            flight.setStls_rend(Util.getTime(args[5].split("=")[1]));
+
+            //如果是即将起飞的飞机，按estr进行排序
+            if(flight.getRec_dep() == Flight.DEPART){
+                Util.addNode(flight, flightQueue, Util.ESTR);
+            }
+        }
+
+        /**
+         * 开始值机
+         * @param message 信息
+         * @param flight 实体类
+         * @throws ParseException
+         */
+        public static void parseCkie(String message, Flight flight) throws ParseException {
+            message = message.substring(message.indexOf("[") + 1, message.indexOf("]"));
+            String fcrs = message.split(", ")[5].split("=")[1];
+            if(!"null".equals(fcrs)){
+                flight.setCkie_fcrs(Util.getTime(fcrs));
+                flight.setState(Flight.CKIE);
+            }
+        }
+
+        /**
+         * 结束值机
+         * @param message 信息
+         * @param flight 实体类
+         * @throws ParseException
+         */
+        public static void parseCkoe(String message, Flight flight) throws ParseException {
+            message = message.substring(message.indexOf("[") + 1, message.indexOf("]"));
+            flight.setCkoe_fcre(Util.getTime(message.split(", ")[5].split("=")[1]));
+            flight.setState(Flight.CKOE);
+        }
+
+        /**
+         * 值机状态变更
+         * @param message
+         * @param flight
+         * @throws ParseException
+         */
+        public static void parseCkls(String message, Flight flight) throws ParseException{
+            message = message.substring(message.indexOf("[") + 1, message.indexOf("]"));
+            System.out.println(message);
+            List<String> regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.lastIndexOf("]") + 1));
         }
     }
 }

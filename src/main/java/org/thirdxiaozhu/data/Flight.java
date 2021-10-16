@@ -1,5 +1,7 @@
 package org.thirdxiaozhu.data;
 
+import org.thirdxiaozhu.AirportMap;
+
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -199,7 +201,12 @@ public class Flight {
     }
 
     public void setApcd(String id, String apcd) {
-        this.apcds.put(Integer.parseInt(id), apcd);
+        String code = AirportMap.AIRPORTS.get(apcd);
+        if(code != null){
+            this.apcds.put(Integer.parseInt(id), code);
+        }else {
+            this.apcds.put(Integer.parseInt(id), apcd);
+        }
     }
 
     /**
@@ -207,16 +214,21 @@ public class Flight {
      * @return
      */
     public String getApcds() {
+
         if(apcds.isEmpty()){
             return "null";
         }else{
-            String ret = "";
+            StringBuilder ret = new StringBuilder();
             String[] apcdStrings = apcds.values().toArray(new String[apcds.size()]);
             //刨除起点站
             for(int i = 1; i < apcds.size(); i++){
-                ret += apcdStrings[i];
+                if(i == apcds.size() - 1){
+                    ret.append(apcdStrings[i]);
+                }else {
+                    ret.append(apcdStrings[i]).append(", ");
+                }
             }
-            return ret;
+            return ret.toString();
         }
     }
 

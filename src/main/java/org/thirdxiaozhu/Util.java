@@ -74,6 +74,7 @@ public class Util {
             return;
         }
 
+        //TODO: 如果返回的Date为空，判断会出现bug
         for(int i = 0; i == 0 || i < flights.size(); i++){
             if(flights.size() == 0){
                 flights.add(flight);
