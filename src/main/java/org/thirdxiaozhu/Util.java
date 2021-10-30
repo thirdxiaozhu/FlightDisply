@@ -13,6 +13,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * @author jiaxv
+ * @date 10.16
+ */
 public class Util {
     public static final int ESTR = 0;
     public static final int FORECAST = 1;
@@ -59,7 +63,7 @@ public class Util {
         while (m.find()){
             args.add(m.group());
         }
-        return args.isEmpty() ? null : args;
+        return args;
     }
 
     /**
@@ -69,17 +73,17 @@ public class Util {
      * @param mode
      */
     public static void addNode(Flight flight, CopyOnWriteArrayList<Flight> flights, int mode){
-        Date processed = Util.ProcessMode(flight, mode);
+        Date processed = Util.processMode(flight, mode);
         if(processed == null) {
             return;
         }
 
         //TODO: 如果返回的Date为空，判断会出现bug
-        for(int i = 0; i == 0 || i < flights.size(); i++){
-            if(flights.size() == 0){
+        for (int i = 0; i == 0 || i < flights.size(); i++) {
+            if (flights.size() == 0) {
                 flights.add(flight);
-            }else if(processed.after(Util.ProcessMode(flights.get(i), mode)) && (flights.size() == i+1 || processed.before(Util.ProcessMode(flights.get(i+1), mode)))){
-                flights.add(i+1, flight);
+            } else if (processed.after(Util.processMode(flights.get(i), mode)) && (flights.size() == i + 1 || processed.before(Util.processMode(flights.get(i + 1), mode)))) {
+                flights.add(i + 1, flight);
             }
         }
     }
@@ -90,7 +94,7 @@ public class Util {
      * @param mode
      * @return
      */
-    private static Date ProcessMode(Flight f, int mode){
+    private static Date processMode(Flight f, int mode){
         return switch (mode) {
             case ESTR -> f.getStls_estr();
             case FORECAST -> f.getForecast_fcre();

@@ -9,38 +9,42 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
+/**
+ * @author jiaxv
+ * @date 10.16
+ */
 public class Analysis {
     //设置加速时间
     //标准速度为1000
-    private final int ACCELERATION = 10;
+    private int ACCELERATION;
 
     private final String filePath;
     private final MainForm mainForm;
+    private String startTime;
 
     private GetInfosTask getInfosTask;
     private TimeTask timeTask;
     private final Map<String, Flight> flightMap;
     private Date currentTime;
+    //根据stls承接航班信息
     public static CopyOnWriteArrayList<Flight> flightQueue;
+    //根据estr，在终端显示
     public static CopyOnWriteArrayList<Flight> flightOnBoard;
     private final DateFormat df = new SimpleDateFormat("yyyyMMddHHmmss");
 
-    public Analysis(String filePath, MainForm mainForm) throws ParseException {
+    public Analysis(String filePath, int ACCELERATION, String startTime, MainForm mainForm) throws ParseException {
         this.filePath = filePath;
         this.mainForm = mainForm;
+        this.ACCELERATION = ACCELERATION;
+        this.startTime = startTime;
 
         flightMap = new HashMap<>();
         flightQueue = new CopyOnWriteArrayList<>();
         flightOnBoard = new CopyOnWriteArrayList<>();
         getInfosTask = new GetInfosTask();
-        timeTask = new TimeTask();
         getInfosTask.start();
-        timeTask.start();
     }
 
     /**
@@ -65,25 +69,14 @@ public class Analysis {
             flightMap.put(paras[0], currentFlight);
         }
 
-
-        switch (pattern){
-            case "AIRL":
-                ParseConctrete.parseAirl(regulared, currentFlight);
-                break;
-            case "STLS":
-                ParseConctrete.parseStls(regulared, currentFlight);
-                break;
-            case "CKIE":
-                ParseConctrete.parseCkie(regulared, currentFlight);
-                break;
-            case "CKOE":
-                ParseConctrete.parseCkoe(regulared, currentFlight);
-                break;
-            case "CKLS":
-                ParseConctrete.parseCkls(regulared, currentFlight);
-                break;
-            default:
-                break;
+        //根据报文类型解析字符串
+        switch (pattern) {
+            case "AIRL" -> ParseConctrete.parseAirl(regulared, currentFlight);
+            case "STLS" -> ParseConctrete.parseStls(regulared, currentFlight);
+            case "CKIE" -> ParseConctrete.parseCkie(regulared, currentFlight);
+            case "CKOE" -> ParseConctrete.parseCkoe(regulared, currentFlight);
+            case "CKLS" -> ParseConctrete.parseCkls(regulared, currentFlight);
+            default -> ParseConctrete.parseOther();
         }
     }
 
@@ -94,13 +87,26 @@ public class Analysis {
     public class GetInfosTask extends Thread{
 
         public GetInfosTask() throws ParseException {
-            //从2018年9月23日0点2分25秒开始
-            currentTime = Util.getTime("20180923000225");
+            //自定义开始时间
+            currentTime = Util.getTime(startTime);
         }
 
         @Override
         public void run() {
             try (Scanner scanner = new Scanner(new File(filePath))) {
+                //该循环的目的是找到自定义开始时间之后的数据
+                while (scanner.hasNextLine()){
+                    String[] timeAndPattern = scanner.nextLine().split(" ");
+                    Date nextTime = Util.getTime(timeAndPattern[0].split("=")[1]);
+
+                    assert nextTime != null;
+                    if(nextTime.after(currentTime)){
+                        timeTask = new TimeTask();
+                        timeTask.start();
+                        break;
+                    }
+                }
+                //该循环遍历到结束
                 while (scanner.hasNextLine()){
                     String perMessage = scanner.nextLine();
                     String[] timeAndPattern = perMessage.split(" ");
@@ -109,9 +115,11 @@ public class Analysis {
                     assert nextTime != null;
                     //强制对齐时间（如果加速过快可能会让下一时间早于上一时间）
                     nextTime = nextTime.before(currentTime) ? currentTime : nextTime;
+                    //线程睡眠到下一个报文时间
                     sleep(Util.getTimeDiff(nextTime, currentTime) / (1000 / ACCELERATION));
                     parseMessage(perMessage, timeAndPattern[1].substring(5,9));
                 }
+
             } catch (FileNotFoundException | ParseException | InterruptedException e) {
                 e.printStackTrace();
             }
@@ -128,12 +136,12 @@ public class Analysis {
             public void run() {
                 try {
                     currentTime = df.parse(df.format(currentTime.getTime() + (long) 1000));
-                    //System.out.println(currentTime);
                 } catch (ParseException e) {
                     e.printStackTrace();
                 }
             }
         };
+
 
         /**
          * 每分钟任务
@@ -151,19 +159,20 @@ public class Analysis {
                     }
                 }
 
-                Collections.sort(flightOnBoard, new Comparator<Flight>() {
+                //对得到的OnBoard进行自定义排序
+                flightOnBoard.sort(new Comparator<Flight>() {
                     @Override
                     public int compare(Flight o1, Flight o2) {
                         int cr = 0;
 
                         //先按状态排序，再按预计开始时间排序
                         int a = o1.getState() - o2.getState();
-                        if(a != 0){
-                            cr = (a > 0) ? -3: 1;
-                        }else {
+                        if (a != 0) {
+                            cr = (a > 0) ? -3 : 1;
+                        } else {
                             boolean after = o1.getForecast_fcrs().after(o2.getForecast_fcrs());
                             boolean equal = o1.getForecast_fcrs().equals(o2.getForecast_fcrs());
-                            if(!equal){
+                            if (!equal) {
                                 cr = after ? 2 : -2;
                             }
                         }
@@ -188,11 +197,14 @@ public class Analysis {
                 try {
                     //最后一页内容的数量
                     int temp = flightOnBoard.size() - i * 10;
+                    //每页内容
                     List<Flight> flightList = new ArrayList<>();
                     for (int r = 0; r < Math.min(temp, 10); r++) {
                         flightList.add(flightOnBoard.get(i * 10 + r));
                     }
+                    //遍历到最后一页的内容后，返回首页
                     i = temp <= 10 ? 0 : i + 1;
+
                     mainForm.updateTable(flightList);
                 }catch (Exception e){
                     e.printStackTrace();
@@ -205,10 +217,10 @@ public class Analysis {
             ScheduledExecutorService service = Executors
                     .newSingleThreadScheduledExecutor();
             // 第二个参数为首次执行的延时时间，第三个参数为定时执行的间隔时间
-            //service.scheduleAtFixedRate(runnable, 0, 60, TimeUnit.SECONDS);
             service.scheduleAtFixedRate(time, 0, ACCELERATION, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(perMinute, 0, ACCELERATION * 60, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(perHalfMinute, 0, ACCELERATION * 30, TimeUnit.MILLISECONDS);
+
         }
     }
 
@@ -226,7 +238,7 @@ public class Analysis {
         public static void parseAirl(String message, Flight flight) {
             List<String> regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.lastIndexOf("]") + 1));
             for(String s : regulared){
-                s = s.substring(s.indexOf("[") + 1, s.indexOf("]") + 1);
+                s = s.substring(s.indexOf("[") + 1, s.indexOf("]"));
                 flight.setApcd(s.split(", ")[0].split("=")[1], s.split(", ")[1].split("=")[1]);
             }
         }
@@ -240,6 +252,7 @@ public class Analysis {
         public static void parseStls(String message, Flight flight) throws ParseException {
             String regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.indexOf("]") + 1)).get(0);
             String[] args = regulared.split(", ");
+
             flight.setStls_estr(Util.getTime(args[2].split("=")[1]));
             flight.setStls_eend(Util.getTime(args[3].split("=")[1]));
             flight.setStls_rstr(Util.getTime(args[4].split("=")[1]));
@@ -285,9 +298,45 @@ public class Analysis {
          * @throws ParseException
          */
         public static void parseCkls(String message, Flight flight) throws ParseException{
-            message = message.substring(message.indexOf("[") + 1, message.indexOf("]"));
-            System.out.println(message);
-            List<String> regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.lastIndexOf("]") + 1));
+            message = message.substring(message.indexOf("[") + 1, message.lastIndexOf("]"));
+            List<String> regulared = Util.regularMatch("\\[.*?\\]", message.substring(message.indexOf("[") + 1, message.lastIndexOf("]")));
+
+            //将解析出来的柜台List进行再解析，得到柜台代码并存储在字符串数组中
+            String[] cknos = new String[regulared.size()];
+            for(int i = 0; i < regulared.size(); i++){
+                String perRegulared = regulared.get(i);
+                String s = perRegulared.substring(perRegulared.indexOf("[") + 1, perRegulared.indexOf("]"));
+                cknos[i] = s.split(", ")[2].split("=")[1];
+            }
+
+            //对字符串数组进行截取
+            if(cknos.length != 0) {
+                //按照从小到大排序
+                Arrays.sort(cknos);
+
+                char headChar = cknos[0].charAt(0);
+                int headPosition = 0;
+                StringBuilder ret = new StringBuilder();
+
+                //charAt(0)判断是不是属于同一组，如果某一项和headChar记录的不是同一组，
+                //那么就把headPosition以及i的前一项加入到ret,并以“-”连接
+                //如果i和headPosition的差值为1，那么就说明该组只有一项，把该项加入ret即可
+                for (int i = 1; i < cknos.length; i++) {
+                    if (cknos[i].charAt(0) != headChar || i == cknos.length - 1) {
+                        if (i - headPosition != 1) {
+                            ret.append(cknos[headPosition]).append("-").append(cknos[i - 1]).append(" ");
+                        } else {
+                            ret.append(cknos[i - 1]).append(" ");
+                        }
+                        headPosition = i;
+                        headChar = cknos[i].charAt(0);
+                    }
+                }
+                flight.setCkno(ret.toString());
+            }
+        }
+
+        public static void parseOther(){
         }
     }
 }

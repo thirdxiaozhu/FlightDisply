@@ -7,6 +7,10 @@ import org.thirdxiaozhu.swing.MainForm;
 import javax.swing.*;
 import java.text.ParseException;
 
+/**
+ * @author jiaxv
+ * @date 10.13
+ */
 public class Test {
 
     public static void main(String[] args) throws ParseException {
@@ -17,7 +21,7 @@ public class Test {
                 createGUI(mainForm);
             }
         });
-        new Analysis("src/main/resources/flightdata.txt", mainForm);
+        new Analysis("src/main/resources/flightdata.txt", 10, "20180923000225", mainForm);
     }
 
     private static void createGUI(MainForm mainForm){

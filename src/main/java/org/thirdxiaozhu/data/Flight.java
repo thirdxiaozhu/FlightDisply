@@ -2,7 +2,6 @@ package org.thirdxiaozhu.data;
 
 import org.thirdxiaozhu.AirportMap;
 
-import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class Flight {
@@ -10,16 +9,8 @@ public class Flight {
     public static int NOSTATE = 0;
     //开始值机
     public static int CKIE = 1;
-    //值机柜台动态信息更新
-    public static int CKLS = 2;
     //停止值机
     public static int CKOE = 3;
-    //开始登机
-    public static int BORE = 4;
-    //结束登机
-    public static int POKE = 5;
-    //起飞
-    public static int DEPE = 6;
 
     //国内
     public static int DOMESTIC = 2403;
@@ -38,6 +29,7 @@ public class Flight {
     public String flid;
     public String ffid;
     public String flightId;
+    public String ckno;
     //预计占用航显开始时间
     public Date stls_estr;
     //预计占用航显结束时间
@@ -240,20 +232,33 @@ public class Flight {
         this.onBoard = onBoard;
     }
 
+    public String getCkno() {
+        return ckno;
+    }
+
+    public void setCkno(String ckno) {
+        this.ckno = ckno;
+    }
+
     @Override
     public String toString() {
         return "Flight{" +
                 "flid='" + flid + '\'' +
-                ", rec_dep=" + rec_dep +
+                ", ffid='" + ffid + '\'' +
                 ", flightId='" + flightId + '\'' +
+                ", ckno='" + ckno + '\'' +
                 ", stls_estr=" + stls_estr +
                 ", stls_eend=" + stls_eend +
                 ", stls_rstr=" + stls_rstr +
                 ", stls_rend=" + stls_rend +
                 ", ckie_fcrs=" + ckie_fcrs +
                 ", ckoe_fcre=" + ckoe_fcre +
+                ", forecast_fcrs=" + forecast_fcrs +
+                ", forecast_fcre=" + forecast_fcre +
                 ", state=" + state +
                 ", fatt=" + fatt +
+                ", rec_dep=" + rec_dep +
+                ", onBoard=" + onBoard +
                 ", apcds=" + apcds +
                 '}';
     }

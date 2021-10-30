@@ -2,6 +2,10 @@ package org.thirdxiaozhu.swing;
 
 import javax.swing.table.DefaultTableModel;
 
+/**
+ * @author jiaxv
+ * @date 10.13
+ */
 public class MyTableModel extends DefaultTableModel {
 
     private static final long serialVersionUID = 1L;

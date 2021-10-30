@@ -4,6 +4,10 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 
+/**
+ * @author jiaxv
+ * @date 10.13
+ */
 public class MyTableRenderer extends DefaultTableCellRenderer {
 
     /*对表格进行渲染的时候单元格默认返回的是JLabel，可以根据需要返回不同的控件*/
